@@ -105,12 +105,12 @@ def wait_for_cassandra(host, timeout=60):
         try:
             cluster = Cluster([host])
             session = cluster.connect()
-            print("✅ Verbindung zu Cassandra erfolgreich.")
+            print("✅ Connection to Cassandra successful.")
             return cluster, session
         except Exception as e:
             if time.time() - start > timeout:
-                raise RuntimeError(f"❌ Timeout beim Warten auf Cassandra: {e}")
-            print("⏳ Cassandra noch nicht bereit, warte...")
+                raise RuntimeError(f"❌ Timeout while waiting for Cassandra: {e}")
+            print("⏳ Cassandra not yet ready, waiting...")
             time.sleep(5)
 
 def main():
