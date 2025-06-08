@@ -2,7 +2,7 @@
 
 ## Installation
 
- - spark-3.5.6-bin-hadoop3-scala2.13.tgz
+ - spark-3.5.6-bin-hadoop3-scala2.13.tgz [https://spark.apache.org/downloads.html]
  - openjdk-17-jdk 
 
 ### Run Kafka
