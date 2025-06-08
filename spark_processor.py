@@ -1,3 +1,5 @@
+import os
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, to_timestamp, window, when, sum, col, avg
 from pyspark.sql.types import StringType, DoubleType, IntegerType, BooleanType, StructType
@@ -7,9 +9,9 @@ from spark_agg.sessionizer import compute_sessions
 
 class ClickstreamAnalyticsJob:
     def __init__(self, kafka_bootstrap_servers="localhost:9092", kafka_topic="clickstream"):
-        #self.kafka_bootstrap_servers = kafka_bootstrap_servers
+        self.kafka_bootstrap_servers = kafka_bootstrap_servers
         # für windows und docker script
-        self.kafka_bootstrap_servers = "host.docker.internal:9092"
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
 
         self.kafka_topic = kafka_topic
         self.spark = self._init_spark()

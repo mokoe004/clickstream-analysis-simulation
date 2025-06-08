@@ -28,3 +28,10 @@ Spark Docker image
 ```bash 
   docker run -d --name=spark -p 4040:4040 spark:3.5.6-scala2.12-java17-python3-ubuntu
 ```
+
+### Run with docker compose (experimental)
+This should start all necessary containers and scripts. You will get lots
+of not understandable logs. When spark is running properly this means your env ist working.
+```bash 
+  docker compose up --build
+```
