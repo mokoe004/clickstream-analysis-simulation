@@ -10,7 +10,11 @@ def run_spark():
 
     cmd = [
         "/opt/spark/bin/spark-submit",
-        "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6",
+        "--packages",
+        ",".join([
+            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6",
+            "com.datastax.spark:spark-cassandra-connector_2.12:3.4.1"
+        ]),
         "/app/spark_processor.py"
     ]
     print(f"📦 Verwende Kafka-Bootstrap: {env['KAFKA_BOOTSTRAP']}")

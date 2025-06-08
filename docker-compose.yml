@@ -58,6 +58,7 @@ services:
       sleep 10;
       apt update &&
       apt install -y python3 &&
+      pip3 install cassandra-driver &&
       python3 run_spark.py
       "
     environment:
@@ -116,6 +117,16 @@ services:
 
 
 
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: "ClickstreamCluster"
+      CASSANDRA_START_RPC: "true"
+    networks:
+      - sparknet
 
 networks:
   sparknet:
