@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# Data
+clickstream_logs/
+.idea/
+
 # Distribution / packaging
 .Python
 build/
@@ -192,5 +196,3 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-
-./clickstream_logs

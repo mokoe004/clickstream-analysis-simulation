@@ -128,7 +128,7 @@ print(f"✅ Clickstream Logs für {DAYS} Tage in '{output_dir.absolute()}' erste
 
 # DOCKER COMMANDS
 
-# docker run -d --name=kafka -p 9092:9092 apache/Kafka
+# docker run -d --name=kafka -p 9092:9092 apache/kafka
 
 # docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
 
@@ -168,7 +168,7 @@ def main():
                     producer.send(topic, value=evt)
                     topic_counter + 1
                     # nur, falls Du sie nicht zu schnell feuern willst:
-                    # time.sleep(0.01)
+                    time.sleep(0.1)
 
     producer.flush()
     producer.close()

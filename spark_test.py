@@ -5,6 +5,7 @@ from pyspark.sql.types import StructType, StringType, DoubleType
 spark = (SparkSession.builder
          .appName("ClickstreamAnalytics")
          .getOrCreate())
+spark.sparkContext.setLogLevel("WARN")
 
 schema = StructType() \
    .add("event_id", StringType()) \
@@ -23,6 +24,7 @@ raw = (spark.readStream
           .selectExpr("CAST(value AS STRING) as json_str")
           .select(from_json("json_str", schema).alias("data"))
           .select("data.*"))
+# .option("startingOffsets", "earliest")
 
 # Beispiel: Pageviews pro Minute
 agg = (raw
