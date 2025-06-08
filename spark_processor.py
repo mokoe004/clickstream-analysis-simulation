@@ -22,6 +22,7 @@ class ClickstreamAnalyticsJob:
     def _init_spark(self):
         spark = (SparkSession.builder
                  .appName("ClickstreamAnalytics")
+                 .config("spark.cassandra.connection.host", "cassandra")
                  .getOrCreate())
         spark.sparkContext.setLogLevel("WARN")
         return spark
@@ -67,6 +68,19 @@ class ClickstreamAnalyticsJob:
                 .selectExpr("CAST(value AS STRING) as json_str")
                 .select(from_json("json_str", self.schema).alias("data"))
                 .select("data.*"))
+
+    def _write_to_cassandra(self, df_, batch_id):
+        df_ = df_ \
+            .withColumn("window_start", col("window").start) \
+            .withColumn("window_end", col("window").end) \
+            .drop("window")
+
+        df_.write \
+            .format("org.apache.spark.sql.cassandra") \
+            .mode("append") \
+            .options(table="campaign_events", keyspace="clickstream") \
+            .save()
+
 
     def build_aggregations(self):
         raw = self.raw_stream
@@ -136,15 +150,21 @@ class ClickstreamAnalyticsJob:
         query_handles = []
 
         for df, name in self.aggregations:
-            query = (df.writeStream
-                     .outputMode("update")
-                     .format("console")
-                     .option("truncate", False)
-                     .queryName(name)
-                     .start())
+            if name == "campaign_events":
+                query = (df.writeStream
+                         .foreachBatch(self._write_to_cassandra)
+                         .outputMode("update")
+                         .start())
+            else:
+                query = (df.writeStream
+                         .outputMode("update")
+                         .format("console")
+                         .option("truncate", False)
+                         .queryName(name)
+                         .start())
             query_handles.append(query)
 
-        # Sessionizer
+        # Sessionizer from own module spark_agg.sessionizer
         session_df = compute_sessions(self.raw_stream)
         session_query = (session_df.writeStream
                          .outputMode("complete")
@@ -162,3 +182,7 @@ class ClickstreamAnalyticsJob:
 if __name__ == "__main__":
     job = ClickstreamAnalyticsJob()
     job.run()
+    df = job.raw_stream  # oder ein Aggregat aus build_aggregations()
+    df.printSchema()
+    df.write.format("console").save()
+

@@ -18,7 +18,13 @@ def run_spark():
         "/app/spark_processor.py"
     ]
     print(f"📦 Verwende Kafka-Bootstrap: {env['KAFKA_BOOTSTRAP']}")
-    subprocess.run(cmd, env=env, check=True)
+    try:
+        subprocess.run(cmd, env=env, check=True)
+    except subprocess.CalledProcessError as e:
+        print("❌ Spark-Job ist abgestürzt.")
+        print(e)
+        exit(1)
+
 
 if __name__ == "__main__":
     run_spark()

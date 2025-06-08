@@ -97,5 +97,20 @@ services:
     networks:
       - sparknet
 
+  cassandra-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - cassandra
+    entrypoint: >
+      bash -c "
+      echo 'Warte auf Cassandra...';
+      sleep 20;
+      python init_cassandra.py
+      "
+    networks:
+      - sparknet
+
 networks:
   sparknet:

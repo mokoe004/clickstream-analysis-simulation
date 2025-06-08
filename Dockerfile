@@ -9,7 +9,7 @@ WORKDIR /app
 COPY . .
 
 # Installiere notwendige Python-Abhängigkeit
-RUN pip install --no-cache-dir kafka-python
+RUN pip install --no-cache-dir kafka-python cassandra-driver
 
 # Setze das Startkommando für den Container
 CMD ["python", "kafka_producer.py"]

@@ -16,6 +16,8 @@
 from cassandra.cluster import Cluster
 from cassandra.query import SimpleStatement
 
+import time
+
 def create_keyspace(session, keyspace="clickstream"):
     cql = f"""
     CREATE KEYSPACE IF NOT EXISTS {keyspace}
@@ -97,16 +99,28 @@ def create_tables(session, keyspace="clickstream"):
 
     print("Tables created or exist.")
 
+def wait_for_cassandra(host, timeout=60):
+    start = time.time()
+    while True:
+        try:
+            cluster = Cluster([host])
+            session = cluster.connect()
+            print("✅ Verbindung zu Cassandra erfolgreich.")
+            return cluster, session
+        except Exception as e:
+            if time.time() - start > timeout:
+                raise RuntimeError(f"❌ Timeout beim Warten auf Cassandra: {e}")
+            print("⏳ Cassandra noch nicht bereit, warte...")
+            time.sleep(5)
+
 def main():
-    cluster = Cluster(['host.docker.internal'])  # Host anpassen, falls nötig (Docker: host.docker.internal)
-    session = cluster.connect()
+    cluster, session = wait_for_cassandra("cassandra")  # oder host.docker.internal wenn lokal
 
     keyspace = "clickstream"
     create_keyspace(session, keyspace)
     session.set_keyspace(keyspace)
 
     create_tables(session, keyspace)
-
     session.shutdown()
 
 if __name__ == "__main__":
