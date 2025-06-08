@@ -98,7 +98,7 @@ def create_tables(session, keyspace="clickstream"):
     print("Tables created or exist.")
 
 def main():
-    cluster = Cluster(['host.docker.internal'])  # Host anpassen, falls nötig (Docker: host.docker.internal)
+    cluster = Cluster(['cassandra'])  # Host anpassen, falls nötig (Docker: host.docker.internal)
     session = cluster.connect()
 
     keyspace = "clickstream"

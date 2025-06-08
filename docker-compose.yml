@@ -84,7 +84,42 @@ services:
       KAFKA_TOPIC: clickstream
     networks:
       - sparknet
+    
+  #Cassandra starten
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    ports:
+      - "9042:9042"  # Standardport für CQL
+    environment:
+      CASSANDRA_CLUSTER_NAME: clickstream-cluster
+      CASSANDRA_DC: datacenter1
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    networks:
+      - sparknet
+
+  cassandra-init:
+    build:
+      context: .
+      dockerfile: DockerFile_Cassandra
+    depends_on:
+      - cassandra
+    entrypoint: >
+      bash -c "
+      echo 'Warte auf Cassandra...';
+      sleep 30;
+      python cassandra_test.py
+      "
+    networks:
+      - sparknet
+
+
 
 
 networks:
   sparknet:
+
+volumes:
+  cassandra-data:
+
