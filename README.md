@@ -23,3 +23,8 @@ Run Spark
   --packages org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.6 \
   spark_processor.py 
 ```
+
+Spark Docker image
+```bash 
+  docker run -d --name=spark -p 4040:4040 spark:3.5.6-scala2.12-java17-python3-ubuntu
+```
