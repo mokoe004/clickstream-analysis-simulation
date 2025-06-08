@@ -69,18 +69,18 @@ class ClickstreamAnalyticsJob:
                 .select(from_json("json_str", self.schema).alias("data"))
                 .select("data.*"))
 
-    def _write_to_cassandra(self, df_, batch_id):
-        df_ = df_ \
-            .withColumn("window_start", col("window").start) \
-            .withColumn("window_end", col("window").end) \
-            .drop("window")
+    def _write_to_cassandra(self, df_, table_name):
+        if "window" in df_.columns:
+            df_ = df_ \
+                .withColumn("window_start", col("window").start) \
+                .withColumn("window_end", col("window").end) \
+                .drop("window")
 
         df_.write \
             .format("org.apache.spark.sql.cassandra") \
             .mode("append") \
-            .options(table="campaign_events", keyspace="clickstream") \
+            .options(table=table_name, keyspace="clickstream") \
             .save()
-
 
     def build_aggregations(self):
         raw = self.raw_stream
@@ -89,7 +89,7 @@ class ClickstreamAnalyticsJob:
             .withColumn("ts", to_timestamp("timestamp"))
             .groupBy(window("ts", "1 minute"), "page")
             .count())
-        self.aggregations.append((time_agg, "time_agg"))
+        self.aggregations.append((time_agg, "time_agg", "cassandra"))
 
         agg_campaign = (
             raw
@@ -98,7 +98,7 @@ class ClickstreamAnalyticsJob:
             .count()
             .withColumnRenamed("count", "event_count")
         )
-        self.aggregations.append((agg_campaign, "campaign_events"))
+        self.aggregations.append((agg_campaign, "campaign_events", "cassandra"))
 
         agg_campaign_actions = (
             raw
@@ -111,7 +111,7 @@ class ClickstreamAnalyticsJob:
                 sum("is_purchase").alias("purchases")
             )
         )
-        self.aggregations.append((agg_campaign_actions, "campaign_actions"))
+        self.aggregations.append((agg_campaign_actions, "campaign_actions", "cassandra"))
 
         agg_product_views = (
             raw
@@ -121,7 +121,7 @@ class ClickstreamAnalyticsJob:
             .count()
             .withColumnRenamed("count", "product_views")
         )
-        self.aggregations.append((agg_product_views, "product_views"))
+        self.aggregations.append((agg_product_views, "product_views", "cassandra"))
 
         product_actions = (
             raw
@@ -136,7 +136,7 @@ class ClickstreamAnalyticsJob:
             )
             .withColumn("add_to_cart_rate", col("add_to_cart") / col("views"))
         )
-        self.aggregations.append((product_actions, "product_actions"))
+        self.aggregations.append((product_actions, "product_actions", "cassandra"))
 
         agg_duration = (
             raw
@@ -144,33 +144,26 @@ class ClickstreamAnalyticsJob:
             .groupBy(window("ts", "10 minutes"), "page")
             .agg(avg("page_duration").alias("avg_duration"))
         )
-        self.aggregations.append((agg_duration, "agg_duration"))
+        self.aggregations.append((agg_duration, "agg_duration", "cassandra"))
+
+
+        self.aggregations.append((compute_sessions(self.raw_stream), "session", "console"))
 
     def start_streams(self):
-        query_handles = []
-
-        for df, name in self.aggregations:
-            if name == "campaign_events":
-                query = (df.writeStream
-                         .foreachBatch(self._write_to_cassandra)
-                         .outputMode("update")
-                         .start())
+        for df, name, output_format in self.aggregations:
+            def write_batch(df_, batch_id, table=name):  # Closure-Trick (.foreachBatch only accepts methods with one argument)
+                print(f"📤 Writing {table} batch {batch_id} to Cassandra")
+                self._write_to_cassandra(df_, table)
+            if output_format=="cassandra":
+                df.writeStream \
+                    .foreachBatch(write_batch) \
+                    .outputMode("update") \
+                    .start()
             else:
-                query = (df.writeStream
-                         .outputMode("update")
-                         .format("console")
-                         .option("truncate", False)
-                         .queryName(name)
-                         .start())
-            query_handles.append(query)
-
-        # Sessionizer from own module spark_agg.sessionizer
-        session_df = compute_sessions(self.raw_stream)
-        session_query = (session_df.writeStream
-                         .outputMode("complete")
-                         .format("console")
-                         .start())
-        query_handles.append(session_query)
+                df.writeStream \
+                    .outputMode("complete") \
+                    .format("console") \
+                    .start()
 
         self.spark.streams.awaitAnyTermination()
 

@@ -112,6 +112,27 @@ services:
     networks:
       - sparknet
 
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - cassandra
+    ports:
+      - "8050:8050"
+    volumes:
+      - .:/app
+    working_dir: /app
+    entrypoint: >
+      bash -c "
+      echo 'Warte auf Cassandra...';
+      sleep 20;
+      python dashboard/dashboard.py
+      "
+    networks:
+      - sparknet
+
+
 networks:
   sparknet:
 

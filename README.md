@@ -31,7 +31,11 @@ Spark Docker image
 
 ### Run with docker compose (experimental)
 This should start all necessary containers and scripts. You will get lots
-of not understandable logs. When spark is running properly this means your env ist working.
+of not understandable logs. When spark is running properly this means your setup ist working.
 ```bash 
   docker compose up --build
 ```
+
+## Run Dashboard after docker compose up
+
+Open http://localhost:8050 in your Browser.

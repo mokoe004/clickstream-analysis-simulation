@@ -9,7 +9,8 @@ WORKDIR /app
 COPY . .
 
 # Installiere notwendige Python-Abhängigkeit
-RUN pip install --no-cache-dir kafka-python cassandra-driver
+RUN pip install --no-cache-dir kafka-python cassandra-driver dash dash-bootstrap-components pandas plotly
+
 
 # Setze das Startkommando für den Container
 CMD ["python", "kafka_producer.py"]
