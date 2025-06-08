@@ -1,41 +1,79 @@
-# Simulation of clickstreams from E-Commerce shop
+# Simulation of Clickstreams from an E-Commerce Shop
 
 ## Installation
 
- - spark-3.5.6-bin-hadoop3-scala2.13.tgz [https://spark.apache.org/downloads.html]
- - openjdk-17-jdk 
+- Download Apache Spark 3.5.6 (Scala 2.13, Hadoop 3): https://spark.apache.org/downloads.html
+- Install openjdk-17-jdk
 
-### Run Kafka
-```bash 
-  docker run -d --name=kafka -p 9092:9092 apache/kafka 
-```
-```bash 
-  docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
-```
-Test if Kafka is running (set time.sleep in kafka_test.py for slower producer)
-```bash 
-  docker exec -ti kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
-```
+---
 
-Run Spark
-```bash 
-  spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.6 \
-  spark_processor.py 
-```
+## Run Kafka manually
 
-Spark Docker image
-```bash 
-  docker run -d --name=spark -p 4040:4040 spark:3.5.6-scala2.12-java17-python3-ubuntu
-```
+Start Kafka:
 
-### Run with docker compose (experimental)
-This should start all necessary containers and scripts. You will get lots
-of not understandable logs. When spark is running properly this means your setup ist working.
-```bash 
-  docker compose up --build
-```
+    docker run -d --name=kafka -p 9092:9092 apache/kafka
 
-## Run Dashboard after docker compose up
+Produce test messages:
 
-Open http://localhost:8050 in your Browser.
+    docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
+
+Consume and test output (use time.sleep in kafka_test.py to slow down producer):
+
+    docker exec -ti kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
+
+---
+
+## Run Spark manually
+
+    spark-submit \
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.6 \
+      spark_processor.py
+
+Optional: run Spark in a container (monitor UI at port 4040):
+
+    docker run -d --name=spark -p 4040:4040 spark:3.5.6-scala2.12-java17-python3-ubuntu
+
+---
+
+## Run via Docker Compose (experimental)
+
+Starts all services: Zookeeper, Kafka, Cassandra, Spark, Producer, and Dashboard.
+
+    docker compose up --build
+
+You’ll see a lot of logs. If Spark starts successfully, the setup works.
+
+---
+
+## Run the Dashboard
+
+Once docker-compose is running:
+
+Open http://localhost:8050 in your browser.
+
+---
+
+## Dev Notes
+
+- Startup time is long: Use docker-compose selectively during development.
+  
+- To only test the dashboard:
+
+      docker compose up cassandra cassandra-init dashboard
+
+  (Assumes campaign_events already contain data)
+
+- To fully run the system with fresh clickstreams:
+
+      docker compose up --build
+
+- For working with Kafka manually:
+
+      docker compose up zookeeper kafka topic-init
+      docker compose exec -ti kafka kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
+
+---
+
+## Status
+
+Work in progress. System components are modular and evolving.
