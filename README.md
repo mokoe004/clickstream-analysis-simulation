@@ -21,5 +21,5 @@ Run Spark
 ```bash 
   spark-submit \
   --packages org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.6 \
-  spark_test.py 
+  spark_processor.py 
 ```
