@@ -130,7 +130,7 @@ print(f"✅ Clickstream Logs für {DAYS} Tage in '{output_dir.absolute()}' erste
 
 # docker run -d --name=kafka -p 9092:9092 apache/kafka
 
-# docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
+# docker compose exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
 
 # docker exec -ti kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
 
