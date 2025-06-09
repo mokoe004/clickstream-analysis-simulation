@@ -1,7 +1,6 @@
 version: "3.8"
 
 services:
-  # Starting Kafka and zookeeper
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     environment:
@@ -9,6 +8,11 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     networks:
       - sparknet
+    healthcheck:
+      test: nc -z localhost 2181 || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kafka:
     image: confluentinc/cp-kafka:7.6.0
@@ -20,32 +24,33 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      # KAFKA_CREATE_TOPICS: "clickstream:1:1"
     depends_on:
       - zookeeper
     networks:
       - sparknet
+    healthcheck:
+      test: kafka-topics --bootstrap-server localhost:9092 --list || exit 1
+      interval: 10s
+      timeout: 10s
+      retries: 10
 
-  # create topics
   topic-init:
     image: confluentinc/cp-kafka:7.6.0
     depends_on:
       - kafka
     networks:
       - sparknet
-    entrypoint: [ "/bin/bash", "-c" ]
+    entrypoint: ["/bin/bash", "-c"]
     command: >
       "
-      echo 'Warte auf Kafka...';
       until kafka-topics --bootstrap-server kafka:9092 --list; do
-        echo 'Kafka noch nicht bereit...';
+        echo 'Kafka not ready...';
         sleep 2;
       done;
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic clickstream;
-      echo 'Topic erstellt.';
+      echo '✅ Kafka Topic erstellt.';
       "
 
-  # Start spark
   spark:
     image: spark:3.5.6-scala2.12-java17-python3-ubuntu
     container_name: spark
@@ -57,10 +62,11 @@ services:
       - kafka
     entrypoint: >
       bash -c "
-      echo 'Warte auf Kafka...';
-      sleep 10;
-      apt update &&
-      apt install -y python3 &&
+      until nc -z kafka 9092; do
+        echo 'Kafka not ready...';
+        sleep 2;
+      done;
+      apt update && apt install -y python3 &&
       pip3 install cassandra-driver &&
       python3 run_spark.py
       "
@@ -69,21 +75,21 @@ services:
     networks:
       - sparknet
 
-  # Start producer of clickstreams
   clickstream-producer:
     build:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - kafka
       - topic-init
     volumes:
       - .:/app
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Warte auf Kafka...';
-      sleep 25;
+      until nc -z kafka 9092; do
+        echo 'Kafka not ready...';
+        sleep 2;
+      done;
       python kafka_producer.py
       "
     environment:
@@ -102,6 +108,11 @@ services:
       CASSANDRA_START_RPC: "true"
     networks:
       - sparknet
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
 
   cassandra-init:
     build:
@@ -114,8 +125,10 @@ services:
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Warte auf Cassandra...';
-      sleep 40;
+      until cqlsh cassandra -e 'describe keyspaces'; do
+        echo 'Waiting for Cassandra...';
+        sleep 3;
+      done;
       python init_cassandra.py
       "
     networks:
@@ -127,7 +140,6 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - cassandra-init
-      - cassandra
     ports:
       - "8050:8050"
     volumes:
@@ -135,17 +147,17 @@ services:
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Warte auf Cassandra...';
-      sleep 40;
+      until cqlsh cassandra -e 'describe keyspaces'; do
+        echo 'Waiting for Cassandra...';
+        sleep 3;
+      done;
       python dashboard/dashboard.py
       "
     networks:
       - sparknet
-
 
 networks:
   sparknet:
 
 volumes:
   cassandra-data:
-
