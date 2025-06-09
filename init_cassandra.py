@@ -1,5 +1,4 @@
 
-
 # docker run --name cassandra-db -p 9042:9042 -d cassandra:latest
 
 # --name cassandra-db gibt dem Container einen Namen
@@ -182,4 +181,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
+
