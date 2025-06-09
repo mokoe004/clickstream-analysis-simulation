@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.sqlite
+*.ipynb
+.git/
+.dockerignore
+.env
+node_modules/

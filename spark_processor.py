@@ -147,7 +147,7 @@ class ClickstreamAnalyticsJob:
         )
         self.aggregations.append((agg_duration, "agg_duration", "cassandra"))
 
-        self.aggregations.extend(compute_session_aggregations(self.raw_stream))
+        #self.aggregations.extend(compute_session_aggregations(self.raw_stream))
 
     def start_streams(self):
         for df, name, output_format in self.aggregations:
