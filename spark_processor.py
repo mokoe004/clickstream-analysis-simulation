@@ -1,5 +1,4 @@
 import os
-
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, to_timestamp, window, when, sum, col, avg
 from pyspark.sql.types import StringType, DoubleType, IntegerType, BooleanType, StructType
@@ -9,10 +8,7 @@ from spark_agg.sessionizer import compute_sessions
 
 class ClickstreamAnalyticsJob:
     def __init__(self, kafka_bootstrap_servers="localhost:9092", kafka_topic="clickstream"):
-        self.kafka_bootstrap_servers = kafka_bootstrap_servers
-        # für windows und docker script
-        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
-
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", kafka_bootstrap_servers)
         self.kafka_topic = kafka_topic
         self.spark = self._init_spark()
         self.schema = self._define_schema()
@@ -22,7 +18,8 @@ class ClickstreamAnalyticsJob:
     def _init_spark(self):
         spark = (SparkSession.builder
                  .appName("ClickstreamAnalytics")
-                 .config("spark.cassandra.connection.host", "cassandra")
+                 .config("spark.cassandra.connection.host", "cassandra")  # Cassandra Host (Docker-Container Name)
+                 .config("spark.jars.packages", "com.datastax.spark:spark-cassandra-connector_2.13:3.4.0")  # Cassandra Connector
                  .getOrCreate())
         spark.sparkContext.setLogLevel("WARN")
         return spark
@@ -69,40 +66,35 @@ class ClickstreamAnalyticsJob:
                 .select(from_json("json_str", self.schema).alias("data"))
                 .select("data.*"))
 
-    def _write_to_cassandra(self, df_, table_name):
-        if "window" in df_.columns:
-            df_ = df_ \
-                .withColumn("window_start", col("window").start) \
-                .withColumn("window_end", col("window").end) \
-                .drop("window")
-
-        df_.write \
-            .format("org.apache.spark.sql.cassandra") \
-            .mode("append") \
-            .options(table=table_name, keyspace="clickstream") \
-            .save()
-
     def build_aggregations(self):
-        raw = self.raw_stream
+        raw = self.raw_stream.withColumn("ts", to_timestamp("timestamp"))
 
+        # time_agg mit Watermark
         time_agg = (raw
-            .withColumn("ts", to_timestamp("timestamp"))
+            .withWatermark("ts", "10 minutes")
             .groupBy(window("ts", "1 minute"), "page")
-            .count())
-        self.aggregations.append((time_agg, "time_agg", "cassandra"))
+            .count()
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window"))
+        self.aggregations.append((time_agg, "time_agg", "time_agg"))
 
+        # campaign_events mit Watermark
         agg_campaign = (
             raw
-            .withColumn("ts", to_timestamp("timestamp"))
+            .withWatermark("ts", "10 minutes")
             .groupBy(window("ts", "5 minutes"), "utm_campaign", "utm_source")
             .count()
             .withColumnRenamed("count", "event_count")
-        )
-        self.aggregations.append((agg_campaign, "campaign_events", "cassandra"))
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window"))
+        self.aggregations.append((agg_campaign, "campaign_events", "campaign_events"))
 
+        # campaign_actions mit Watermark
         agg_campaign_actions = (
             raw
-            .withColumn("ts", to_timestamp("timestamp"))
+            .withWatermark("ts", "10 minutes")
             .withColumn("is_add_to_cart", when(col("action") == "add_to_cart", 1).otherwise(0))
             .withColumn("is_purchase", when(col("action") == "purchase", 1).otherwise(0))
             .groupBy(window("ts", "1 hour"), "utm_campaign")
@@ -110,22 +102,28 @@ class ClickstreamAnalyticsJob:
                 sum("is_add_to_cart").alias("add_to_cart"),
                 sum("is_purchase").alias("purchases")
             )
-        )
-        self.aggregations.append((agg_campaign_actions, "campaign_actions", "cassandra"))
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window"))
+        self.aggregations.append((agg_campaign_actions, "campaign_actions", "campaign_actions"))
 
+        # product_views mit Watermark
         agg_product_views = (
             raw
-            .withColumn("ts", to_timestamp("timestamp"))
+            .withWatermark("ts", "10 minutes")
             .filter(col("page") == "product_detail")
             .groupBy(window("ts", "1 hour"), "product_id")
             .count()
             .withColumnRenamed("count", "product_views")
-        )
-        self.aggregations.append((agg_product_views, "product_views", "cassandra"))
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window"))
+        self.aggregations.append((agg_product_views, "product_views", "product_views"))
 
+        # product_actions mit Watermark
         product_actions = (
             raw
-            .withColumn("ts", to_timestamp("timestamp"))
+            .withWatermark("ts", "10 minutes")
             .filter(col("product_id").isNotNull())
             .withColumn("is_view", when(col("action") == "view", 1).otherwise(0))
             .withColumn("is_add", when(col("action") == "add_to_cart", 1).otherwise(0))
@@ -135,35 +133,113 @@ class ClickstreamAnalyticsJob:
                 sum("is_add").alias("add_to_cart")
             )
             .withColumn("add_to_cart_rate", col("add_to_cart") / col("views"))
-        )
-        self.aggregations.append((product_actions, "product_actions", "cassandra"))
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window"))
+        self.aggregations.append((product_actions, "product_actions", "product_actions"))
 
+        # agg_duration mit Watermark
         agg_duration = (
             raw
-            .withColumn("ts", to_timestamp("timestamp"))
+            .withWatermark("ts", "10 minutes")
             .groupBy(window("ts", "10 minutes"), "page")
             .agg(avg("page_duration").alias("avg_duration"))
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window"))
+        self.aggregations.append((agg_duration, "agg_duration", "agg_duration"))
+
+        # 1. Produkt-Käufe
+        agg_product_purchases = (
+            raw
+            .withWatermark("ts", "10 minutes")
+            .filter(col("action") == "purchase")
+            .groupBy(window("ts", "1 hour"), "product_id")
+            .count()
+            .withColumnRenamed("count", "purchases")
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window")
         )
-        self.aggregations.append((agg_duration, "agg_duration", "cassandra"))
+        self.aggregations.append((agg_product_purchases, "product_purchases", "product_purchases"))
+
+        # 2. Produkte im Warenkorb
+        agg_product_cart = (
+            raw
+            .withWatermark("ts", "10 minutes")
+            .filter(col("action") == "add_to_cart")
+            .groupBy(window("ts", "1 hour"), "product_id")
+            .count()
+            .withColumnRenamed("count", "cart_adds")
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window")
+        )
+        self.aggregations.append((agg_product_cart, "product_cart_additions", "product_cart_additions"))
+
+        # 3. Website Views gesamt
+        agg_website_views = (
+            raw
+            .withWatermark("ts", "10 minutes")
+            .groupBy(window("ts", "1 hour"))
+            .count()
+            .withColumnRenamed("count", "views")
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window")
+        )
+        self.aggregations.append((agg_website_views, "website_views", "website_views"))
+
+        # 4. Geräteverteilung
+        agg_device_distribution = (
+            raw
+            .withWatermark("ts", "10 minutes")
+            .groupBy(window("ts", "1 hour"), "device_type")
+            .count()
+            .withColumnRenamed("count", "views")
+            .withColumn("window_start", col("window").start)
+            .withColumn("window_end", col("window").end)
+            .drop("window")
+        )
+        self.aggregations.append((agg_device_distribution, "device_distribution", "device_distribution"))
+
+        # # 5. Kampagnen-Events
+        # agg_campaign_events = (
+        #     raw
+        #     .withWatermark("ts", "10 minutes")
+        #     .filter(col("utm_campaign").isNotNull())
+        #     .groupBy(window("ts", "1 hour"), "utm_campaign")
+        #     .count()
+        #     .withColumnRenamed("count", "event_count")
+        #     .withColumn("window_start", col("window").start)
+        #     .withColumn("window_end", col("window").end)
+        #     .drop("window")
+        # )
+        # self.aggregations.append((agg_campaign_events, "campaign_events", "campaign_events"))
 
 
-        self.aggregations.append((compute_sessions(self.raw_stream), "session", "console"))
+
 
     def start_streams(self):
-        for df, name, output_format in self.aggregations:
-            def write_batch(df_, batch_id, table=name):  # Closure-Trick (.foreachBatch only accepts methods with one argument)
-                print(f"📤 Writing {table} batch {batch_id} to Cassandra")
-                self._write_to_cassandra(df_, table)
-            if output_format=="cassandra":
-                df.writeStream \
-                    .foreachBatch(write_batch) \
-                    .outputMode("update") \
-                    .start()
-            else:
-                df.writeStream \
-                    .outputMode("complete") \
-                    .format("console") \
-                    .start()
+        query_handles = []
+
+        for df, query_name, cassandra_table in self.aggregations:
+            query = (df.writeStream
+                     .outputMode("append")
+                     .format("org.apache.spark.sql.cassandra")  # Cassandra Sink
+                     .option("keyspace", "clickstream")
+                     .option("table", cassandra_table)
+                     .option("checkpointLocation", f"/tmp/checkpoints/{query_name}")  # Checkpoint für genau einmal schreiben
+                     .start())
+            query_handles.append(query)
+
+        # Sessionizer nur als Konsole ausgeben (kannst du ähnlich erweitern)
+        session_df = compute_sessions(self.raw_stream)
+        session_query = (session_df.writeStream
+                         .outputMode("complete")
+                         .format("console")
+                         .start())
+        query_handles.append(session_query)
 
         self.spark.streams.awaitAnyTermination()
 
@@ -175,7 +251,3 @@ class ClickstreamAnalyticsJob:
 if __name__ == "__main__":
     job = ClickstreamAnalyticsJob()
     job.run()
-    df = job.raw_stream  # oder ein Aggregat aus build_aggregations()
-    df.printSchema()
-    df.write.format("console").save()
-

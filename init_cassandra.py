@@ -27,77 +27,133 @@ def create_keyspace(session, keyspace="clickstream"):
     print(f"Keyspace '{keyspace}' created or exists.")
 
 def create_tables(session, keyspace="clickstream"):
-    # Table für time_agg
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {keyspace}.time_agg (
-        window_start timestamp,
-        window_end timestamp,
-        page text,
-        count bigint,
-        PRIMARY KEY ((window_start), page)
-    )
-    """)
+    tables = {
+        "time_agg": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.time_agg (
+                window_start timestamp,
+                window_end timestamp,
+                page text,
+                count bigint,
+                PRIMARY KEY ((window_start), page)
+            )
+        """,
 
-    # Table für campaign_events
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {keyspace}.campaign_events (
-        window_start timestamp,
-        window_end timestamp,
-        utm_campaign text,
-        utm_source text,
-        event_count bigint,
-        PRIMARY KEY ((window_start), utm_campaign, utm_source)
-    )
-    """)
+        "campaign_events": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.campaign_events (
+                window_start timestamp,
+                window_end timestamp,
+                utm_campaign text,
+                utm_source text,
+                event_count bigint,
+                PRIMARY KEY ((window_start), utm_campaign, utm_source)
+            )
+        """,
 
-    # Table für campaign_actions
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {keyspace}.campaign_actions (
-        window_start timestamp,
-        window_end timestamp,
-        utm_campaign text,
-        add_to_cart bigint,
-        purchases bigint,
-        PRIMARY KEY ((window_start), utm_campaign)
-    )
-    """)
+        "campaign_actions": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.campaign_actions (
+                window_start timestamp,
+                window_end timestamp,
+                utm_campaign text,
+                add_to_cart bigint,
+                purchases bigint,
+                PRIMARY KEY ((window_start), utm_campaign)
+            )
+        """,
 
-    # Table für product_views
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {keyspace}.product_views (
-        window_start timestamp,
-        window_end timestamp,
-        product_id text,
-        product_views bigint,
-        PRIMARY KEY ((window_start), product_id)
-    )
-    """)
+        "product_views": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.product_views (
+                window_start timestamp,
+                window_end timestamp,
+                product_id text,
+                product_views bigint,
+                PRIMARY KEY ((window_start), product_id)
+            )
+        """,
 
-    # Table für product_actions
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {keyspace}.product_actions (
-        window_start timestamp,
-        window_end timestamp,
-        product_id text,
-        views bigint,
-        add_to_cart bigint,
-        add_to_cart_rate double,
-        PRIMARY KEY ((window_start), product_id)
-    )
-    """)
+        "product_actions": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.product_actions (
+                window_start timestamp,
+                window_end timestamp,
+                product_id text,
+                views bigint,
+                add_to_cart bigint,
+                add_to_cart_rate double,
+                PRIMARY KEY ((window_start), product_id)
+            )
+        """,
 
-    # Table für agg_duration
-    session.execute(f"""
-    CREATE TABLE IF NOT EXISTS {keyspace}.agg_duration (
-        window_start timestamp,
-        window_end timestamp,
-        page text,
-        avg_duration double,
-        PRIMARY KEY ((window_start), page)
-    )
-    """)
+        "agg_duration": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.agg_duration (
+                window_start timestamp,
+                window_end timestamp,
+                page text,
+                avg_duration double,
+                PRIMARY KEY ((window_start), page)
+            )
+        """,
 
-    print("Tables created or exist.")
+        "product_purchases": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.product_purchases (
+                window_start timestamp,
+                window_end timestamp,
+                product_id text,
+                purchases bigint,
+                PRIMARY KEY ((window_start), product_id)
+            )
+        """,
+
+        "product_cart_additions": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.product_cart_additions (
+                window_start timestamp,
+                window_end timestamp,
+                product_id text,
+                cart_adds bigint,
+                PRIMARY KEY ((window_start), product_id)
+            )
+        """,
+
+        "website_views": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.website_views (
+                window_start timestamp,
+                window_end timestamp,
+                views bigint,
+                PRIMARY KEY (window_start)
+            )
+        """,
+
+        "device_distribution": f"""
+            CREATE TABLE IF NOT EXISTS {keyspace}.device_distribution (
+                window_start timestamp,
+                window_end timestamp,
+                device_type text,
+                views bigint,
+                PRIMARY KEY ((window_start), device_type)
+            )
+        """
+    }
+
+    # # Kampagne
+    # session.execute(f"""
+    # CREATE TABLE IF NOT EXISTS {keyspace}.campaign_events (
+    #     window_start timestamp,
+    #     window_end timestamp,
+    #     utm_campaign text,
+    #     event_count bigint,
+    #     PRIMARY KEY ((window_start), utm_campaign)
+    # )
+    # """)
+
+
+
+
+    print(f"📦 Creating tables in keyspace '{keyspace}'...\n")
+    for name, cql in tables.items():
+        try:
+            session.execute(cql)
+            print(f"✅ Table '{name}' created or exists.")
+        except Exception as e:
+            print(f"❌ Failed to create table '{name}': {e}")  # wichtig!
+    print("\n🏁 Table creation completed.")
 
 def wait_for_cassandra(host, timeout=60):
     start = time.time()
@@ -121,6 +177,7 @@ def main():
     session.set_keyspace(keyspace)
 
     create_tables(session, keyspace)
+    time.sleep(10)  # Cassandra Zeit geben, DDLs zu finalisieren
     session.shutdown()
 
 if __name__ == "__main__":
