@@ -4,7 +4,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, to_timestamp, window, when, sum, col, avg
 from pyspark.sql.types import StringType, DoubleType, IntegerType, BooleanType, StructType
 
-from spark_agg.sessionizer import compute_sessions
+from spark_agg.sessionizer import compute_session_aggregations
 
 
 class ClickstreamAnalyticsJob:
@@ -23,6 +23,7 @@ class ClickstreamAnalyticsJob:
         spark = (SparkSession.builder
                  .appName("ClickstreamAnalytics")
                  .config("spark.cassandra.connection.host", "cassandra")
+                 .config("spark.sql.streaming.statefulOperator.checkCorrectness.enabled", "false")
                  .getOrCreate())
         spark.sparkContext.setLogLevel("WARN")
         return spark
@@ -146,8 +147,7 @@ class ClickstreamAnalyticsJob:
         )
         self.aggregations.append((agg_duration, "agg_duration", "cassandra"))
 
-
-        self.aggregations.append((compute_sessions(self.raw_stream), "session", "console"))
+        self.aggregations.extend(compute_session_aggregations(self.raw_stream))
 
     def start_streams(self):
         for df, name, output_format in self.aggregations:
