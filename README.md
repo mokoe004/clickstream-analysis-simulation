@@ -67,11 +67,19 @@ Open http://localhost:8050 in your browser.
 
       docker compose up --build
 
-- For working with Kafka manually:
+  - For working with Kafka manually:
 
-      docker compose up zookeeper kafka topic-init
-      docker compose exec -ti kafka kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
+        docker compose up zookeeper kafka topic-init
+        docker compose exec -ti kafka kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
 
+  - Rebuild docker compose
+
+        docker compose down --volumes --remove-orphans
+        docker compose build --no-cache  
+
+  - Then: 
+    
+        docker compose up --build
 ---
 
 ## Status
