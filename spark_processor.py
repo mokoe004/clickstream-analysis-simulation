@@ -9,10 +9,7 @@ from spark_agg.sessionizer import compute_session_aggregations
 
 class ClickstreamAnalyticsJob:
     def __init__(self, kafka_bootstrap_servers="localhost:9092", kafka_topic="clickstream"):
-        self.kafka_bootstrap_servers = kafka_bootstrap_servers
-        # für windows und docker script
-        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
-
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", kafka_bootstrap_servers)
         self.kafka_topic = kafka_topic
         self.spark = self._init_spark()
         self.schema = self._define_schema()
@@ -147,7 +144,7 @@ class ClickstreamAnalyticsJob:
         )
         self.aggregations.append((agg_duration, "agg_duration", "cassandra"))
 
-        #self.aggregations.extend(compute_session_aggregations(self.raw_stream))
+        self.aggregations.extend(compute_session_aggregations(self.raw_stream))
 
     def start_streams(self):
         for df, name, output_format in self.aggregations:

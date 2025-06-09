@@ -37,7 +37,10 @@ services:
     command: >
       "
       echo 'Warte auf Kafka...';
-      sleep 10;
+      until kafka-topics --bootstrap-server kafka:9092 --list; do
+        echo 'Kafka noch nicht bereit...';
+        sleep 2;
+      done;
       kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic clickstream;
       echo 'Topic erstellt.';
       "
@@ -112,6 +115,7 @@ services:
     entrypoint: >
       bash -c "
       echo 'Warte auf Cassandra...';
+      sleep 40;
       python init_cassandra.py
       "
     networks:
@@ -122,6 +126,7 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
+      - cassandra-init
       - cassandra
     ports:
       - "8050:8050"
@@ -131,7 +136,7 @@ services:
     entrypoint: >
       bash -c "
       echo 'Warte auf Cassandra...';
-      sleep 20;
+      sleep 40;
       python dashboard/dashboard.py
       "
     networks:
