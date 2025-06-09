@@ -5,6 +5,7 @@ from pyspark.sql.functions import from_json, to_timestamp, window, when, sum, co
 from pyspark.sql.types import StringType, DoubleType, IntegerType, BooleanType, StructType
 
 from spark_agg.sessionizer import compute_session_aggregations
+from spark_agg.aggregations import build_aggregations
 
 
 class ClickstreamAnalyticsJob:
@@ -80,92 +81,35 @@ class ClickstreamAnalyticsJob:
             .options(table=table_name, keyspace="clickstream") \
             .save()
 
-    def build_aggregations(self):
-        raw = self.raw_stream
-
-        time_agg = (raw
-            .withColumn("ts", to_timestamp("timestamp"))
-            .groupBy(window("ts", "1 minute"), "page")
-            .count())
-        self.aggregations.append((time_agg, "time_agg", "cassandra"))
-
-        agg_campaign = (
-            raw
-            .withColumn("ts", to_timestamp("timestamp"))
-            .groupBy(window("ts", "5 minutes"), "utm_campaign", "utm_source")
-            .count()
-            .withColumnRenamed("count", "event_count")
-        )
-        self.aggregations.append((agg_campaign, "campaign_events", "cassandra"))
-
-        agg_campaign_actions = (
-            raw
-            .withColumn("ts", to_timestamp("timestamp"))
-            .withColumn("is_add_to_cart", when(col("action") == "add_to_cart", 1).otherwise(0))
-            .withColumn("is_purchase", when(col("action") == "purchase", 1).otherwise(0))
-            .groupBy(window("ts", "1 hour"), "utm_campaign")
-            .agg(
-                sum("is_add_to_cart").alias("add_to_cart"),
-                sum("is_purchase").alias("purchases")
-            )
-        )
-        self.aggregations.append((agg_campaign_actions, "campaign_actions", "cassandra"))
-
-        agg_product_views = (
-            raw
-            .withColumn("ts", to_timestamp("timestamp"))
-            .filter(col("page") == "product_detail")
-            .groupBy(window("ts", "1 hour"), "product_id")
-            .count()
-            .withColumnRenamed("count", "product_views")
-        )
-        self.aggregations.append((agg_product_views, "product_views", "cassandra"))
-
-        product_actions = (
-            raw
-            .withColumn("ts", to_timestamp("timestamp"))
-            .filter(col("product_id").isNotNull())
-            .withColumn("is_view", when(col("action") == "view", 1).otherwise(0))
-            .withColumn("is_add", when(col("action") == "add_to_cart", 1).otherwise(0))
-            .groupBy(window("ts", "1 hour"), "product_id")
-            .agg(
-                sum("is_view").alias("views"),
-                sum("is_add").alias("add_to_cart")
-            )
-            .withColumn("add_to_cart_rate", col("add_to_cart") / col("views"))
-        )
-        self.aggregations.append((product_actions, "product_actions", "cassandra"))
-
-        agg_duration = (
-            raw
-            .withColumn("ts", to_timestamp("timestamp"))
-            .groupBy(window("ts", "10 minutes"), "page")
-            .agg(avg("page_duration").alias("avg_duration"))
-        )
-        self.aggregations.append((agg_duration, "agg_duration", "cassandra"))
-
-        self.aggregations.extend(compute_session_aggregations(self.raw_stream))
-
     def start_streams(self):
+        queries = []
+
         for df, name, output_format in self.aggregations:
-            def write_batch(df_, batch_id, table=name):  # Closure-Trick (.foreachBatch only accepts methods with one argument)
+            def write_batch(df_, batch_id, table=name):
                 print(f"📤 Writing {table} batch {batch_id} to Cassandra")
                 self._write_to_cassandra(df_, table)
-            if output_format=="cassandra":
-                df.writeStream \
+
+            if output_format == "cassandra":
+                query = df.writeStream \
                     .foreachBatch(write_batch) \
                     .outputMode("update") \
+                    .option("checkpointLocation", f"/tmp/checkpoints/{name}") \
                     .start()
             else:
-                df.writeStream \
+                query = df.writeStream \
                     .outputMode("complete") \
                     .format("console") \
                     .start()
 
-        self.spark.streams.awaitAnyTermination()
+            queries.append(query)
+
+        # WICHTIG: auf alle warten
+        for q in queries:
+            q.awaitTermination()
 
     def run(self):
-        self.build_aggregations()
+        self.aggregations.extend(build_aggregations(self.raw_stream))
+        #self.aggregations.extend(compute_session_aggregations(self.raw_stream))
         self.start_streams()
 
 

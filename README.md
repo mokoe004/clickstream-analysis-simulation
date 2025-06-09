@@ -79,7 +79,8 @@ Open http://localhost:8050 in your browser.
 
   - Then: 
     
-        docker compose up --build
+         docker compose build --no-cache
+
 ---
 
 ## Status
