@@ -25,7 +25,7 @@ def create_keyspace(session, keyspace="clickstream"):
     session.execute(cql)
     print(f"Keyspace '{keyspace}' created or exists.")
 
-def create_tables(session, keyspace="clickstream"):
+def create_stream_tables(keyspace="clickstream") -> dict:
     tables = {
         "time_agg": f"""
             CREATE TABLE IF NOT EXISTS {keyspace}.time_agg (
@@ -130,6 +130,7 @@ def create_tables(session, keyspace="clickstream"):
             )
         """
     }
+    return tables
 
     # # Kampagne
     # session.execute(f"""
@@ -142,9 +143,108 @@ def create_tables(session, keyspace="clickstream"):
     # )
     # """)
 
+def create_batch_tables(keyspace="clickstream") -> dict:
+    tables = {
+        # BATCH-Tabellen (identisch im Schema, aber anderer Tabellenname)
+        "time_agg_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.time_agg_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    page text,
+                    count bigint,
+                    PRIMARY KEY ((window_start), page)
+                )
+            """,
+        "campaign_events_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.campaign_events_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    utm_campaign text,
+                    utm_source text,
+                    event_count bigint,
+                    PRIMARY KEY ((window_start), utm_campaign, utm_source)
+                )
+            """,
+        "campaign_actions_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.campaign_actions_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    utm_campaign text,
+                    add_to_cart bigint,
+                    purchases bigint,
+                    PRIMARY KEY ((window_start), utm_campaign)
+                )
+            """,
+        "product_views_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.product_views_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    product_id text,
+                    product_views bigint,
+                    PRIMARY KEY ((window_start), product_id)
+                )
+            """,
+        "product_actions_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.product_actions_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    product_id text,
+                    views bigint,
+                    add_to_cart bigint,
+                    add_to_cart_rate double,
+                    PRIMARY KEY ((window_start), product_id)
+                )
+            """,
+        "agg_duration_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.agg_duration_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    page text,
+                    avg_duration double,
+                    PRIMARY KEY ((window_start), page)
+                )
+            """,
+        "product_purchases_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.product_purchases_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    product_id text,
+                    purchases bigint,
+                    PRIMARY KEY ((window_start), product_id)
+                )
+            """,
+        "product_cart_additions_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.product_cart_additions_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    product_id text,
+                    cart_adds bigint,
+                    PRIMARY KEY ((window_start), product_id)
+                )
+            """,
+        "website_views_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.website_views_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    views bigint,
+                    PRIMARY KEY (window_start)
+                )
+            """,
+        "device_distribution_batch": f"""
+                CREATE TABLE IF NOT EXISTS {keyspace}.device_distribution_batch (
+                    window_start timestamp,
+                    window_end timestamp,
+                    device_type text,
+                    views bigint,
+                    PRIMARY KEY ((window_start), device_type)
+                )
+            """
 
+    }
+    return tables
 
-
+def create_tables(session, keyspace="clickstream"):
+    tables = create_stream_tables(keyspace) | create_batch_tables(keyspace)
     print(f"📦 Creating tables in keyspace '{keyspace}'...\n")
     for name, cql in tables.items():
         try:

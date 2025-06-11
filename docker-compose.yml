@@ -20,30 +20,12 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      # KAFKA_CREATE_TOPICS: "clickstream:1:1"
+      KAFKA_CREATE_TOPICS: "clickstream:1:1"
     depends_on:
       - zookeeper
     networks:
       - sparknet
 
-  # create topics
-  topic-init:
-    image: confluentinc/cp-kafka:7.6.0
-    depends_on:
-      - kafka
-    networks:
-      - sparknet
-    entrypoint: [ "/bin/bash", "-c" ]
-    command: >
-      "
-      echo 'Warte auf Kafka...';
-      until kafka-topics --bootstrap-server kafka:9092 --list; do
-        echo 'Kafka noch nicht bereit...';
-        sleep 2;
-      done;
-      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic clickstream;
-      echo 'Topic erstellt.';
-      "
 
   # Start spark
   spark:
@@ -68,6 +50,7 @@ services:
       "
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
+      PROCESSING_MODE: "stream"
     networks:
       - sparknet
 
@@ -78,15 +61,13 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - kafka
-      - topic-init
     volumes:
       - .:/app
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Warte auf Kafka...';
-      sleep 25;
-      python kafka_producer.py
+      echo 'Starting clickstream generation...';
+      python clickstream_producer.py
       "
     environment:
       KAFKA_BROKER: kafka:9092
@@ -137,8 +118,7 @@ services:
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Warte auf Cassandra...';
-      sleep 40;
+      echo 'Starting Dashboard...';
       python dashboard/dashboard.py
       "
     networks:

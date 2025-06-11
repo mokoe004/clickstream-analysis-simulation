@@ -4,17 +4,23 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, to_timestamp, window, when, sum, col, avg
 from pyspark.sql.types import StringType, DoubleType, IntegerType, BooleanType, StructType
 
+from spark_agg.aggregations_batch import build_batch_aggregations
 from spark_agg.sessionizer import compute_session_aggregations
 from spark_agg.aggregations import build_aggregations
 
 
 class ClickstreamAnalyticsJob:
-    def __init__(self, kafka_bootstrap_servers="localhost:9092", kafka_topic="clickstream"):
-        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", kafka_bootstrap_servers)
+    def __init__(self, kafka_topic="clickstream"):
+        self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
+        # processing mode is set in Docker env. Options: ["stream", "batch"]
+        self.processing_mode = os.getenv("PROCESSING_MODE", "stream")
         self.kafka_topic = kafka_topic
         self.spark = self._init_spark()
         self.schema = self._define_schema()
-        self.raw_stream = self._read_stream()
+        if self.processing_mode == "batch":
+            self.raw_stream = self._read_batch()
+        else:
+            self.raw_stream = self._read_stream()
         self.aggregations = []
 
     def _init_spark(self):
@@ -68,6 +74,11 @@ class ClickstreamAnalyticsJob:
                 .select(from_json("json_str", self.schema).alias("data"))
                 .select("data.*"))
 
+    def _read_batch(self, batch_dir):
+        return (self.spark.read.option("header", True)
+                .csv(f"/clickstream_logs/clickstream_2025-03-13.csv"))
+
+
     def _write_to_cassandra(self, df_, table_name):
         if "window" in df_.columns:
             df_ = df_ \
@@ -108,15 +119,15 @@ class ClickstreamAnalyticsJob:
             q.awaitTermination()
 
     def run(self):
-        self.aggregations.extend(build_aggregations(self.raw_stream))
+        # Loads aggregations depending on processing mode
+        if self.processing_mode == "batch":
+            self.aggregations.extend(build_batch_aggregations(self.raw_stream))
+        else:
+            self.aggregations.extend(build_aggregations(self.raw_stream))
         #self.aggregations.extend(compute_session_aggregations(self.raw_stream))
         self.start_streams()
 
 
 if __name__ == "__main__":
-    job = ClickstreamAnalyticsJob()
+    job = ClickstreamAnalyticsJob() # add dir with bath csv here
     job.run()
-    df = job.raw_stream  # oder ein Aggregat aus build_aggregations()
-    df.printSchema()
-    df.write.format("console").save()
-

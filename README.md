@@ -17,10 +17,20 @@ Produce test messages:
 
     docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
 
-Consume and test output (use time.sleep in kafka_test.py to slow down producer):
+Consume and test output. Jump into kafka container and execute:
 
-    docker exec -ti kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
+    kafka-console-consumer --bootstrap-server kafka:9092 --topic clickstream --from-beginning
 
+Kafka commands:
+```bash
+  # DOCKER COMMANDS
+  
+  # docker run -d --name=kafka -p 9092:9092 apache/kafka
+  
+  # docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
+  
+  # docker exec -ti kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
+```
 ---
 
 ## Run Spark manually
@@ -41,13 +51,14 @@ Starts all services: Zookeeper, Kafka, Cassandra, Spark, Producer, and Dashboard
 
     docker compose up --build
 
-You’ll see a lot of logs. If Spark starts successfully, the setup works.
+You’ll see a lot of logs. If Spark starts successfully, the setup works. You may need to start containers manually due
+to race conditions.
 
 ---
 
 ## Run the Dashboard
 
-Once docker-compose is running:
+Once docker compose is running:
 
 Open http://localhost:8050 in your browser.
 
@@ -61,7 +72,7 @@ Open http://localhost:8050 in your browser.
 
       docker compose up cassandra cassandra-init dashboard
 
-  (Assumes campaign_events already contain data)
+  (Assumes Cassandra already contain data)
 
 - To fully run the system with fresh clickstreams:
 
