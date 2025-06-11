@@ -64,7 +64,13 @@ def random_session_events(session_id, user_id, base_time):
         current_time += timedelta(seconds=random.randint(5, 60))
 
         # Produktdetailseitenlogik
-        product_id = product["product_id"] if page == "product_detail" else None
+        # product_id = product["product_id"] if page == "product_detail" else None
+        if page == "product_detail" or action in ["add_to_cart", "purchase"]:
+            product_id = product["product_id"]
+        else:
+            product_id = None
+
+        
         page_url = f"/products/{product['product_id']}" if page == "product_detail" else f"/{page}"
 
         event = {
