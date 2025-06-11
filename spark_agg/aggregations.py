@@ -87,7 +87,7 @@ def build_aggregations(raw_stream) -> list:
     agg_product_purchases = (
         raw
         .withWatermark("ts", "10 minutes")
-        .filter(col("action") == "purchase")
+        .filter((col("action") == "purchase") & (col("product_id").isNotNull()))
         .groupBy(window("ts", "1 hour"), "product_id")
         .count()
         .withColumnRenamed("count", "purchases")
@@ -101,7 +101,7 @@ def build_aggregations(raw_stream) -> list:
     agg_product_cart = (
         raw
         .withWatermark("ts", "10 minutes")
-        .filter(col("action") == "add_to_cart")
+        .filter((col("action") == "add_to_cart")  & (col("product_id").isNotNull()))
         .groupBy(window("ts", "1 hour"), "product_id")
         .count()
         .withColumnRenamed("count", "cart_adds")

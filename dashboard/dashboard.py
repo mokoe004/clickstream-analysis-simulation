@@ -10,7 +10,19 @@ def fetch_data(query):
     cluster = Cluster(["cassandra"])
     session = cluster.connect("clickstream")
     rows = session.execute(query)
-    df = pd.DataFrame(rows)
+    
+    if not rows:
+        print(f"⚠️ Abfrage ergab keine Daten: {query}")
+        return pd.DataFrame()
+    
+    columns = rows.column_names
+    df = pd.DataFrame(rows, columns=columns)
+
+# Zum Debuggen
+    debug = query.replace("SELECT * FROM ", "").strip()
+    print(debug)
+    print(df.columns) 
+    
     session.shutdown()
     return df
 
@@ -52,7 +64,7 @@ app.layout = dbc.Container([
 
     dcc.Graph(
         id="line-views",
-        figure=px.line(df_pages, x="window_start", y="total_views", title="Website Views über Zeit")
+        figure=px.line(df_pages, x="window_start", y="views", title="Website Views über Zeit")
     ),
 
     # dcc.Graph(
@@ -60,10 +72,10 @@ app.layout = dbc.Container([
     #     figure=px.histogram(df_sessions, x="duration_seconds", title="Session-Dauerverteilung")
     # ),
 
-    dcc.Graph(
-        id="bar-page-types",
-        figure=px.bar(df_pages, x="page", y="total_views", title="Meistbesuchte Seitentypen")
-    ),
+    # dcc.Graph(
+    #     id="bar-page-types",
+    #     figure=px.bar(df_pages, x="page", y="total_views", title="Meistbesuchte Seitentypen")
+    # ),
 
     # dcc.Graph(
     #     id="bar-cities",
@@ -72,18 +84,18 @@ app.layout = dbc.Container([
 
     dcc.Graph(
         id="pie-devices",
-        figure=px.pie(df_devices, names="device_type", values="count", title="Geräteverteilung")
+        figure=px.pie(df_devices, names="device_type", values="views", title="Geräteverteilung")
     ),
 
-    dcc.Graph(
-        id="pie-os",
-        figure=px.pie(df_devices, names="os", values="count", title="OS-Verteilung")
-    ),
+    # dcc.Graph(
+    #     id="pie-os",
+    #     figure=px.pie(df_devices, names="os", values="count", title="OS-Verteilung")
+    # ),
 
-    dcc.Graph(
-        id="pie-browsers",
-        figure=px.pie(df_devices, names="browser", values="count", title="Browser-Verteilung")
-    ),
+    # dcc.Graph(
+    #     id="pie-browsers",
+    #     figure=px.pie(df_devices, names="browser", values="count", title="Browser-Verteilung")
+    # ),
 
     # dcc.Graph(
     #     id="pie-login",
