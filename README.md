@@ -43,6 +43,7 @@ Optional: run Spark in a container (monitor UI at port 4040):
 
     docker run -d --name=spark -p 4040:4040 spark:3.5.6-scala2.12-java17-python3-ubuntu
 
+Important: set PROCESSING_MODE env in docker-compose.yml
 ---
 
 ## Run via Docker Compose (experimental)

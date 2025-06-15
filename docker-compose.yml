@@ -42,7 +42,7 @@ services:
     entrypoint: >
       bash -c "
       echo 'Warte auf Kafka...';
-      sleep 50;
+      sleep 20;
       apt update &&
       apt install -y python3 &&
       pip3 install cassandra-driver &&

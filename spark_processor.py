@@ -63,6 +63,7 @@ class ClickstreamAnalyticsJob:
             .add("ab_test_variant", StringType()) \
             .add("is_logged_in", BooleanType())
 
+    #------------------------speed layer (streaming) reading raw stream------------------------------
     def _read_stream(self):
         return (self.spark.readStream
                 .format("kafka")
@@ -74,7 +75,8 @@ class ClickstreamAnalyticsJob:
                 .select(from_json("json_str", self.schema).alias("data"))
                 .select("data.*"))
 
-    def _read_batch(self, batch_dir):
+    # ----------------------batch layer reading raw stream------------------------------------
+    def _read_batch(self):
         return (self.spark.read.option("header", True)
                 .csv(f"/clickstream_logs/clickstream_2025-03-13.csv"))
 
@@ -92,6 +94,8 @@ class ClickstreamAnalyticsJob:
             .options(table=table_name, keyspace="clickstream") \
             .save()
 
+
+    #---------------------------Streaming to Cassandra----------------------------------
     def start_streams(self):
         queries = []
 

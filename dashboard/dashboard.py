@@ -1,30 +1,32 @@
 import dash
 from dash import dcc, html
+from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 from cassandra.cluster import Cluster
 
+from campaign_traffic_plot import create_campaign_traffic_plot
+from website_views_plot import create_website_views_plot
+from live_top_products_plot import fetch_live_product_purchases
+
+
 # Cassandra-Verbindung
 def fetch_data(query):
-    cluster = Cluster(["cassandra"])
+    cluster = Cluster(["cassandra"])  # Cassandra-Host anpassen falls nötig
     session = cluster.connect("clickstream")
     rows = session.execute(query)
-    
+
     if not rows:
         print(f"⚠️ Abfrage ergab keine Daten: {query}")
         return pd.DataFrame()
-    
+
     columns = rows.column_names
     df = pd.DataFrame(rows, columns=columns)
 
-# Zum Debuggen
-    debug = query.replace("SELECT * FROM ", "").strip()
-    print(debug)
-    print(df.columns) 
-    
     session.shutdown()
     return df
+
 
 # Dash App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -35,17 +37,28 @@ df_views = fetch_data("SELECT * FROM product_views")
 df_cart = fetch_data("SELECT * FROM product_cart_additions")
 df_purchases = fetch_data("SELECT * FROM product_purchases")
 df_pages = fetch_data("SELECT * FROM website_views")
-# df_sessions = fetch_data("SELECT * FROM session_durations")
 df_devices = fetch_data("SELECT * FROM device_distribution")
-# df_geo = fetch_data("SELECT * FROM geo_stats")
-# df_login = fetch_data("SELECT * FROM login_stats")
-# df_referrers = fetch_data("SELECT * FROM referrer_stats")
 df_campaigns = fetch_data("SELECT * FROM campaign_events")
-# df_campaign_conversion = fetch_data("SELECT * FROM campaign_conversions")
+
+# Neue Aggregationen
+df_duration = fetch_data("SELECT * FROM agg_duration")
+df_campaign_actions = fetch_data("SELECT * FROM campaign_actions")
+df_timeagg = fetch_data("SELECT * FROM time_agg")
+
+# Optionales Gruppieren/Aggregieren (nur bei Bedarf)
+df_duration = df_duration.groupby("page", as_index=False)["avg_duration"].mean()
+df_timeagg = df_timeagg.groupby(["window_start", "page"], as_index=False)["count"].sum()
+
 
 # Layout der App
 app.layout = dbc.Container([
     html.H1("📊 Clickstream Campaign Dashboard", className="my-4"),
+
+    # Intervall-Komponente hinzufügen (alle 60 Sekunden)
+    dcc.Interval(id="live-interval", interval=60 * 1000, n_intervals=0),
+
+    # Live-Graph-Komponente
+    dcc.Graph(id="live-top-products"),
 
     dcc.Graph(
         id="bar-top-products",
@@ -64,48 +77,13 @@ app.layout = dbc.Container([
 
     dcc.Graph(
         id="line-views",
-        figure=px.line(df_pages, x="window_start", y="views", title="Website Views über Zeit")
+        figure=create_website_views_plot(df_pages)
     ),
-
-    # dcc.Graph(
-    #     id="hist-session-duration",
-    #     figure=px.histogram(df_sessions, x="duration_seconds", title="Session-Dauerverteilung")
-    # ),
-
-    # dcc.Graph(
-    #     id="bar-page-types",
-    #     figure=px.bar(df_pages, x="page", y="total_views", title="Meistbesuchte Seitentypen")
-    # ),
-
-    # dcc.Graph(
-    #     id="bar-cities",
-    #     figure=px.bar(df_geo, x="geo_city", y="visits", title="Top-Städte")
-    # ),
 
     dcc.Graph(
         id="pie-devices",
         figure=px.pie(df_devices, names="device_type", values="views", title="Geräteverteilung")
     ),
-
-    # dcc.Graph(
-    #     id="pie-os",
-    #     figure=px.pie(df_devices, names="os", values="count", title="OS-Verteilung")
-    # ),
-
-    # dcc.Graph(
-    #     id="pie-browsers",
-    #     figure=px.pie(df_devices, names="browser", values="count", title="Browser-Verteilung")
-    # ),
-
-    # dcc.Graph(
-    #     id="pie-login",
-    #     figure=px.pie(df_login, names="is_logged_in", values="count", title="Eingeloggt vs. nicht")
-    # ),
-
-    # dcc.Graph(
-    #     id="bar-referrers",
-    #     figure=px.bar(df_referrers, x="referrer", y="count", title="Referrer-Domains")
-    # ),
 
     dcc.Graph(
         id="bar-campaigns",
@@ -113,42 +91,39 @@ app.layout = dbc.Container([
                       x="utm_campaign", y="event_count", title="Top-UTM-Kampagnen")
     ),
 
-    # dcc.Graph(
-    #     id="bar-campaign-conversion",
-    #     figure=px.bar(df_campaign_conversion, x="utm_campaign", y="conversion_rate",
-    #                   title="Kampagnen-Konversionen")
-    # ),
-
     dcc.Graph(
         id="line-campaign-traffic",
-        figure=px.line(df_campaigns, x="window_start", y="event_count", color="utm_campaign",
-                       title="Kampagnen-Traffic-Trends über Zeit")
+        figure=create_campaign_traffic_plot(df_campaigns, top_n=5)
+    ),
+
+    dcc.Graph(
+        id="bar-duration",
+        figure=px.bar(df_duration, x="page", y="avg_duration", color="page",
+                      title="Ø Verweildauer pro Seite (agg_duration)")
+    ),
+
+    dcc.Graph(
+        id="grouped-campaign-actions",
+        figure=px.bar(df_campaign_actions, x="utm_campaign", y=["add_to_cart", "purchases"],
+                      barmode="group", title="Kampagnen-Performance: Warenkorb vs Käufe")
+    ),
+
+    dcc.Graph(
+        id="line-timeagg",
+        figure=px.line(df_timeagg, x="window_start", y="count", color="page",
+                       title="Seitenbesuche über Zeit (time_agg)")
     )
-
-    # dcc.Graph(
-    #     id="line-campaigns",
-    #     figure=px.line(
-    #         df,
-    #         x="window_start",
-    #         y="event_count",
-    #         color="utm_campaign",
-    #         title="Event Count über Zeit pro Kampagne"
-    #     )
-    # ),
-
-    # dcc.Graph(
-    #     id="bar-sources",
-    #     figure=px.bar(
-    #         df.groupby("utm_source", as_index=False)["event_count"].sum(),
-    #         x="utm_source",
-    #         y="event_count",
-    #         title="Total Event Count pro Quelle (utm_source)"
-    #     )
-    # )
 ], fluid=True)
+
+@app.callback(
+    Output("live-top-products", "figure"),
+    Input("live-interval", "n_intervals")
+)
+def update_live_top_products(n):
+    return fetch_live_product_purchases(minutes=10, top_n=5)
+
 
 # App starten
 if __name__ == "__main__":
     print("Open http://localhost:8050 in your Browser.")
     app.run(host="0.0.0.0", debug=True)
-

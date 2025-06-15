@@ -173,6 +173,7 @@ if __name__ == "__main__":
     generate_clickstream_data(
         days=90,
         sessions_per_day=100,
-        output_format="csv",         # ["json", "csv"] Set None if don't want to safe at all
-        send_to_kafka=False         # True aktivieren wenn Kafka benutzt wird
+        output_format=None,         # ["json", "csv"] Set None if don't want to safe at all
+        send_to_kafka=True         # True aktivieren wenn Kafka benutzt wird
     )
+
