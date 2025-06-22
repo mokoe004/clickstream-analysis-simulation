@@ -9,14 +9,6 @@
 
 ## Run Kafka manually
 
-Start Kafka:
-
-    docker run -d --name=kafka -p 9092:9092 apache/kafka
-
-Produce test messages:
-
-    docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
-
 Consume and test output. Jump into kafka container and execute:
 
     kafka-console-consumer --bootstrap-server kafka:9092 --topic clickstream --from-beginning
@@ -33,6 +25,47 @@ Kafka commands:
 ```
 ---
 
+## Cassandra Commands
+```bash
+  cqlsh
+```
+```sql
+  SELECT * FROM agg_duration LIMIT 5;
+  SELECT * FROM campaign_actions LIMIT 5;
+  SELECT * FROM campaign_events LIMIT 5;
+  SELECT * FROM device_distribution LIMIT 5;
+  SELECT * FROM product_actions LIMIT 5;
+  SELECT * FROM product_cart_additions LIMIT 5;
+  SELECT * FROM product_purchases LIMIT 5;
+  SELECT * FROM product_views LIMIT 5;
+  SELECT * FROM time_agg LIMIT 5;
+  SELECT * FROM website_views LIMIT 5;
+```
+```sql
+  TRUNCATE agg_duration;
+  TRUNCATE campaign_actions;
+  TRUNCATE campaign_events;
+  TRUNCATE device_distribution;
+  TRUNCATE product_actions;
+  TRUNCATE product_cart_additions;
+  TRUNCATE product_purchases;
+  TRUNCATE product_views;
+  TRUNCATE time_agg;
+  TRUNCATE website_views;
+```
+```sql
+  TRUNCATE agg_duration_batch;
+  TRUNCATE campaign_actions_batch;
+  TRUNCATE campaign_events_batch;
+  TRUNCATE device_distribution_batch;
+  TRUNCATE product_actions_batch;
+  TRUNCATE product_cart_additions_batch;
+  TRUNCATE product_purchases_batch;
+  TRUNCATE product_views_batch;
+  TRUNCATE time_agg_batch;
+  TRUNCATE website_views_batch;
+```
+---
 ## Run Spark manually
 
     spark-submit \
