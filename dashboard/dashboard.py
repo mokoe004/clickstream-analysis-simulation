@@ -1,63 +1,50 @@
+# dashboard.py
+
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
-from cassandra.cluster import Cluster
 
+from data_fetch import fetch_data
 from campaign_traffic_plot import create_campaign_traffic_plot
 from website_views_plot import create_website_views_plot
 from live_top_products_plot import fetch_live_product_purchases
 
-
-# Cassandra-Verbindung
-def fetch_data(query):
-    cluster = Cluster(["cassandra"])  # Cassandra-Host anpassen falls nötig
-    session = cluster.connect("clickstream")
-    rows = session.execute(query)
-
-    if not rows:
-        print(f"⚠️ Abfrage ergab keine Daten: {query}")
-        return pd.DataFrame()
-
-    columns = rows.column_names
-    df = pd.DataFrame(rows, columns=columns)
-
-    session.shutdown()
-    return df
-
-
 # Dash App initialisieren
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-app.title = "Campaign Dashboard"
+app.title = "Clickstream Dashboard"
+
+KEYSPACE = "clickstream"
 
 # Daten laden
-df_views = fetch_data("SELECT * FROM product_views")
-df_cart = fetch_data("SELECT * FROM product_cart_additions")
-df_purchases = fetch_data("SELECT * FROM product_purchases")
-df_pages = fetch_data("SELECT * FROM website_views")
-df_devices = fetch_data("SELECT * FROM device_distribution")
-df_campaigns = fetch_data("SELECT * FROM campaign_events")
+df_views = fetch_data("SELECT * FROM product_views", KEYSPACE, "product_views")
+df_cart = fetch_data("SELECT * FROM product_cart_additions", KEYSPACE, "product_cart_additions")
+df_purchases = fetch_data("SELECT * FROM product_purchases", KEYSPACE, "product_purchases")
+df_pages = fetch_data("SELECT * FROM website_views", KEYSPACE, "website_views")
+df_devices = fetch_data("SELECT * FROM device_distribution", KEYSPACE, "device_distribution")
+df_campaigns = fetch_data("SELECT * FROM campaign_events", KEYSPACE, "campaign_events")
+df_duration = fetch_data("SELECT * FROM agg_duration", KEYSPACE, "agg_duration")
+df_campaign_actions = fetch_data("SELECT * FROM campaign_actions", KEYSPACE, "campaign_actions")
+df_timeagg = fetch_data("SELECT * FROM time_agg", KEYSPACE, "time_agg")
 
-# Neue Aggregationen
-df_duration = fetch_data("SELECT * FROM agg_duration")
-df_campaign_actions = fetch_data("SELECT * FROM campaign_actions")
-df_timeagg = fetch_data("SELECT * FROM time_agg")
+# Safe aggregations
+if not df_duration.empty and {"page", "avg_duration"}.issubset(df_duration.columns):
+    df_duration = df_duration.groupby("page", as_index=False)["avg_duration"].mean()
+else:
+    df_duration = pd.DataFrame(columns=["page", "avg_duration"])
 
-# Optionales Gruppieren/Aggregieren (nur bei Bedarf)
-df_duration = df_duration.groupby("page", as_index=False)["avg_duration"].mean()
-df_timeagg = df_timeagg.groupby(["window_start", "page"], as_index=False)["count"].sum()
+if not df_timeagg.empty and {"window_start", "page", "count"}.issubset(df_timeagg.columns):
+    df_timeagg = df_timeagg.groupby(["window_start", "page"], as_index=False)["count"].sum()
+else:
+    df_timeagg = pd.DataFrame(columns=["window_start", "page", "count"])
 
-
-# Layout der App
+# Layout of App
 app.layout = dbc.Container([
     html.H1("📊 Clickstream Campaign Dashboard", className="my-4"),
 
-    # Intervall-Komponente hinzufügen (alle 60 Sekunden)
     dcc.Interval(id="live-interval", interval=60 * 1000, n_intervals=0),
-
-    # Live-Graph-Komponente
     dcc.Graph(id="live-top-products"),
 
     dcc.Graph(
@@ -87,8 +74,11 @@ app.layout = dbc.Container([
 
     dcc.Graph(
         id="bar-campaigns",
-        figure=px.bar(df_campaigns.groupby("utm_campaign", as_index=False)["event_count"].sum(),
-                      x="utm_campaign", y="event_count", title="Top-UTM-Kampagnen")
+        figure=px.bar(
+            df_campaigns.groupby("utm_campaign", as_index=False)["event_count"].sum()
+            if not df_campaigns.empty else pd.DataFrame(columns=["utm_campaign", "event_count"]),
+            x="utm_campaign", y="event_count", title="Top-UTM-Kampagnen"
+        )
     ),
 
     dcc.Graph(
@@ -106,6 +96,7 @@ app.layout = dbc.Container([
         id="grouped-campaign-actions",
         figure=px.bar(df_campaign_actions, x="utm_campaign", y=["add_to_cart", "purchases"],
                       barmode="group", title="Kampagnen-Performance: Warenkorb vs Käufe")
+        if not df_campaign_actions.empty else px.bar(pd.DataFrame(columns=["utm_campaign", "add_to_cart", "purchases"]))
     ),
 
     dcc.Graph(
@@ -115,6 +106,7 @@ app.layout = dbc.Container([
     )
 ], fluid=True)
 
+
 @app.callback(
     Output("live-top-products", "figure"),
     Input("live-interval", "n_intervals")
@@ -123,7 +115,6 @@ def update_live_top_products(n):
     return fetch_live_product_purchases(minutes=10, top_n=5)
 
 
-# App starten
 if __name__ == "__main__":
     print("Open http://localhost:8050 in your Browser.")
     app.run(host="0.0.0.0", debug=True)
