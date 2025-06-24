@@ -149,4 +149,4 @@ class ClickstreamAnalyticsJob:
 
 if __name__ == "__main__":
     job = ClickstreamAnalyticsJob() # add dir with bath csv here
-    job.run("batch")
+    job.run("stream")

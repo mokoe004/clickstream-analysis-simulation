@@ -120,14 +120,16 @@ Also for `_batch` tables:
 ## 🔥 Spark Streaming / Batch Mode
 
 The Spark job can run in two modes: **streaming** or **batch**.
-The mode is controlled in the `main()` function of `spark_processor.py` via the `PROCESSING_MODE` variable.
+The mode is controlled in the `main()` function of `spark_processor.py`.
 
 ### ✅ To switch modes:
 
 1. Edit `spark_processor.py`:
 
    ```python
-   PROCESSING_MODE = "stream"  # or "batch"
+    if __name__ == "__main__":
+        job = ClickstreamAnalyticsJob() 
+        job.run("stream") # or "batch"
    ```
 
 2. Restart the Spark container:
