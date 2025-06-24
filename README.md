@@ -1,34 +1,77 @@
-# Simulation of Clickstreams from an E-Commerce Shop
 
-## Installation
+# 🛍️ Simulation of Clickstreams from an E-Commerce Shop
 
-- Download Apache Spark 3.5.6 (Scala 2.13, Hadoop 3): https://spark.apache.org/downloads.html
-- Install openjdk-17-jdk
+This project simulates clickstream behavior from users on an e-commerce website. It supports real-time streaming and batch processing, stores analytics results in Cassandra, and visualizes them through a dashboard.
 
 ---
 
-## Run Kafka manually
+## 🚀 Getting Started
 
-Consume and test output. Jump into kafka container and execute:
+### 🔧 Prerequisites
 
-    kafka-console-consumer --bootstrap-server kafka:9092 --topic clickstream --from-beginning
+- **Apache Spark 3.5.6** (Scala 2.13, Hadoop 3): [Download here](https://spark.apache.org/downloads.html)
+- **Java 17**:  
+  Install via:
 
-Kafka commands:
-```bash
-  # DOCKER COMMANDS
-  
-  # docker run -d --name=kafka -p 9092:9092 apache/kafka
-  
-  # docker exec -ti kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server :9092 --topic clickstream
-  
-  # docker exec -ti kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
-```
+  ```bash
+  sudo apt install openjdk-17-jdk
+  ```
+
 ---
 
-## Cassandra Commands
+## 🐳 Run via Docker Compose
+
+Start the complete pipeline including Zookeeper, Kafka, Cassandra, Spark, Producer, and Dashboard:
+
 ```bash
-  cqlsh
+docker compose up --build
 ```
+
+You’ll see a lot of logs. If Spark starts successfully, everything is working.
+
+⚠️ **Startup issues?**
+Sometimes services fail to start in the correct order. If components crash, just start them individually:
+
+```bash
+docker compose up zookeeper
+docker compose up kafka
+docker compose up cassandra
+docker compose up cassandra-init
+docker compose up stream-producer
+docker compose up spark
+docker compose up dashboard
+```
+
+To reset and rebuild everything cleanly:
+
+```bash
+docker compose down --volumes --remove-orphans
+docker compose build --no-cache
+docker compose up
+```
+
+---
+
+## 🧪 Kafka: Manual Consumer Test
+
+To test the stream:
+
+```bash
+docker compose exec kafka kafka-console-consumer   --bootstrap-server kafka:9092   --topic clickstream   --from-beginning
+```
+
+---
+
+## 🧾 Cassandra: Query Interface
+
+Enter Cassandra shell:
+
+```bash
+docker compose exec cassandra cqlsh
+```
+
+Sample queries:
+
 ```sql
   SELECT * FROM agg_duration LIMIT 5;
   SELECT * FROM campaign_actions LIMIT 5;
@@ -41,6 +84,9 @@ Kafka commands:
   SELECT * FROM time_agg LIMIT 5;
   SELECT * FROM website_views LIMIT 5;
 ```
+
+To truncate (clear) tables:
+
 ```sql
   TRUNCATE agg_duration;
   TRUNCATE campaign_actions;
@@ -53,6 +99,9 @@ Kafka commands:
   TRUNCATE time_agg;
   TRUNCATE website_views;
 ```
+
+Also for `_batch` tables:
+
 ```sql
   TRUNCATE agg_duration_batch;
   TRUNCATE campaign_actions_batch;
@@ -65,69 +114,137 @@ Kafka commands:
   TRUNCATE time_agg_batch;
   TRUNCATE website_views_batch;
 ```
----
-## Run Spark manually
-
-    spark-submit \
-      --packages org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.6 \
-      spark_processor.py
-
-Optional: run Spark in a container (monitor UI at port 4040):
-
-    docker run -d --name=spark -p 4040:4040 spark:3.5.6-scala2.12-java17-python3-ubuntu
-
-Important: set PROCESSING_MODE env in docker-compose.yml
----
-
-## Run via Docker Compose (experimental)
-
-Starts all services: Zookeeper, Kafka, Cassandra, Spark, Producer, and Dashboard.
-
-    docker compose up --build
-
-You’ll see a lot of logs. If Spark starts successfully, the setup works. You may need to start containers manually due
-to race conditions.
 
 ---
 
-## Run the Dashboard
+## 🔥 Spark Streaming / Batch Mode
 
-Once docker compose is running:
+The Spark job can run in two modes: **streaming** or **batch**.
+The mode is controlled in the `main()` function of `spark_processor.py` via the `PROCESSING_MODE` variable.
 
-Open http://localhost:8050 in your browser.
+### ✅ To switch modes:
 
----
+1. Edit `spark_processor.py`:
 
-## Dev Notes
+   ```python
+   PROCESSING_MODE = "stream"  # or "batch"
+   ```
 
-- Startup time is long: Use docker-compose selectively during development.
-  
-- To only test the dashboard:
+2. Restart the Spark container:
 
-      docker compose up cassandra cassandra-init dashboard
+   ```bash
+   docker compose restart spark
+   ```
 
-  (Assumes Cassandra already contain data)
+### 📺 Watch microbatch output
 
-- To fully run the system with fresh clickstreams:
+To observe processing:
 
-      docker compose up --build
+```bash
+docker compose logs -f spark
+```
 
-  - For working with Kafka manually:
-
-        docker compose up zookeeper kafka topic-init
-        docker compose exec -ti kafka kafka-console-consumer.sh --bootstrap-server :9092 --topic clickstream --from-beginning
-
-  - Rebuild docker compose
-
-        docker compose down --volumes --remove-orphans
-        docker compose build --no-cache  
-
-  - Then: 
-    
-         docker compose build --no-cache
+The logs will show when microbatches are triggered and when data is written to Cassandra.
 
 ---
 
-## Status
+## 📊 Run the Dashboard
 
-Work in progress. System components are modular and evolving.
+Once services are running:
+
+Open your browser at [http://localhost:8050](http://localhost:8050)
+
+---
+
+## 🧑‍💻 Developer Notes
+
+* **Use only needed services during development** to reduce startup time.
+
+### Run Dashboard Only (assuming data exists):
+
+```bash
+docker compose up cassandra cassandra-init dashboard
+```
+
+### Run Kafka manually:
+
+```bash
+docker compose up zookeeper kafka topic-init
+```
+
+Then:
+
+```bash
+docker compose exec kafka kafka-console-consumer   --bootstrap-server kafka:9092 --topic clickstream --from-beginning
+```
+
+---
+
+## 🔍 Jump Into Container Terminals
+
+### Kafka
+
+```bash
+docker compose exec kafka bash
+```
+
+Inside container:
+
+```bash
+kafka-console-consumer --bootstrap-server kafka:9092 --topic clickstream --from-beginning
+```
+
+### Cassandra
+
+```bash
+docker compose exec cassandra cqlsh
+```
+
+### Spark
+
+```bash
+docker compose exec spark bash
+```
+
+Check logs or run diagnostic scripts manually from `/app`.
+
+### Producer
+
+```bash
+docker compose exec stream-producer bash
+```
+
+### Dashboard
+
+```bash
+docker compose exec dashboard bash
+```
+
+---
+
+## 🧱 System Architecture
+
+* **Kafka**: Message bus for clickstreams
+* **Spark**: Streaming & batch processor
+* **Cassandra**: Storage backend
+* **Dashboard**: Visualization frontend (Dash/Plotly)
+* **Producer**: Generates synthetic clickstream data
+* **Batch Generator**: Optional for static CSV generation
+
+---
+
+## 📦 Versioning
+
+This setup uses:
+
+* Docker Compose spec: `3.8`
+* Spark: `3.5.6`
+* Cassandra: `4.1`
+* Kafka: `7.6.0`
+
+---
+
+## 🚧 Status
+
+🛠️ **Work in Progress**
+All components are modular and still under active development.

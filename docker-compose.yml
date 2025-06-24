@@ -22,11 +22,14 @@ services:
       KAFKA_CREATE_TOPICS: "clickstream:1:1"
     depends_on:
       - zookeeper
+    volumes:
+      - .:/app
     entrypoint:
       - bash
       - -c
       - |
         /app/wait-for-it.sh zookeeper:2181 --timeout=60 --strict --
+        sleep 20
         echo "🟢 Zookeeper ist verfügbar – Starte Kafka..."
         /etc/confluent/docker/run
     networks:
