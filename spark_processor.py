@@ -13,14 +13,11 @@ class ClickstreamAnalyticsJob:
     def __init__(self, kafka_topic="clickstream"):
         self.kafka_bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP", "localhost:9092")
         # processing mode is set in Docker env. Options: ["stream", "batch"]
-        self.processing_mode = os.getenv("PROCESSING_MODE", "stream")
         self.kafka_topic = kafka_topic
+        self._output_format = "cassandra"
         self.spark = self._init_spark()
         self.schema = self._define_schema()
-        if self.processing_mode == "batch":
-            self.raw_stream = self._read_batch()
-        else:
-            self.raw_stream = self._read_stream()
+        self.raw_stream = []
         self.aggregations = []
 
     def _init_spark(self):
@@ -76,9 +73,9 @@ class ClickstreamAnalyticsJob:
                 .select("data.*"))
 
     # ----------------------batch layer reading raw stream------------------------------------
-    def _read_batch(self):
+    def _read_batch(self, csv_path = "./clickstream_logs/clickstream_2025-06-22.csv"):
         return (self.spark.read.option("header", True)
-                .csv(f"/clickstream_logs/clickstream_2025-03-13.csv"))
+                .csv(csv_path))
 
 
     def _write_to_cassandra(self, df_, table_name):
@@ -99,12 +96,14 @@ class ClickstreamAnalyticsJob:
     def start_streams(self):
         queries = []
 
-        for df, name, output_format in self.aggregations:
+        for df, name, out in self.aggregations:
             def write_batch(df_, batch_id, table=name):
                 print(f"📤 Writing {table} batch {batch_id} to Cassandra")
+
+                df_.show(5, truncate=False)
                 self._write_to_cassandra(df_, table)
 
-            if output_format == "cassandra":
+            if self._output_format == "cassandra":
                 query = df.writeStream \
                     .foreachBatch(write_batch) \
                     .outputMode("update") \
@@ -122,16 +121,32 @@ class ClickstreamAnalyticsJob:
         for q in queries:
             q.awaitTermination()
 
-    def run(self):
-        # Loads aggregations depending on processing mode
-        if self.processing_mode == "batch":
+    def run(self, processing_mode = "stream"):
+        #self.raw_stream.writeStream \
+        #    .outputMode("append") \
+        #    .format("console") \
+        #   .option("truncate", False) \
+        #    .start() \
+        #    .awaitTermination()
+        if processing_mode == "batch":
+            self.raw_stream = self._read_batch()
             self.aggregations.extend(build_batch_aggregations(self.raw_stream))
-        else:
+
+            for df, name, _ in self.aggregations:
+                print(f"📤 Writing batch '{name}' to Cassandra")
+                df.show(5, truncate=False)
+                df.printSchema()
+                self._write_to_cassandra(df, name)
+
+        elif processing_mode == "stream":
+            self.raw_stream = self._read_stream()
             self.aggregations.extend(build_aggregations(self.raw_stream))
-        #self.aggregations.extend(compute_session_aggregations(self.raw_stream))
-        self.start_streams()
+            self.start_streams()
+
+        elif processing_mode == "combined":
+            print("Merging stream and batch")
 
 
 if __name__ == "__main__":
     job = ClickstreamAnalyticsJob() # add dir with bath csv here
-    job.run()
+    job.run("batch")

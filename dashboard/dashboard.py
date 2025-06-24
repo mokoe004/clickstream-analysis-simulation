@@ -29,6 +29,14 @@ df_duration = fetch_data("SELECT * FROM agg_duration", KEYSPACE, "agg_duration")
 df_campaign_actions = fetch_data("SELECT * FROM campaign_actions", KEYSPACE, "campaign_actions")
 df_timeagg = fetch_data("SELECT * FROM time_agg", KEYSPACE, "time_agg")
 
+# Batch-Daten laden
+df_views_batch = fetch_data("SELECT * FROM product_views_batch", KEYSPACE, "product_views_batch")
+df_cart_batch = fetch_data("SELECT * FROM product_cart_additions_batch", KEYSPACE, "product_cart_additions_batch")
+df_purchases_batch = fetch_data("SELECT * FROM product_purchases_batch", KEYSPACE, "product_purchases_batch")
+df_duration_batch = fetch_data("SELECT * FROM agg_duration_batch", KEYSPACE, "agg_duration_batch")
+df_timeagg_batch = fetch_data("SELECT * FROM time_agg_batch", KEYSPACE, "time_agg_batch")
+
+
 # Safe aggregations
 if not df_duration.empty and {"page", "avg_duration"}.issubset(df_duration.columns):
     df_duration = df_duration.groupby("page", as_index=False)["avg_duration"].mean()
@@ -40,11 +48,22 @@ if not df_timeagg.empty and {"window_start", "page", "count"}.issubset(df_timeag
 else:
     df_timeagg = pd.DataFrame(columns=["window_start", "page", "count"])
 
-# Layout of App
+# Batch safe aggregations
+if not df_duration_batch.empty and {"page", "avg_duration"}.issubset(df_duration_batch.columns):
+    df_duration_batch = df_duration_batch.groupby("page", as_index=False)["avg_duration"].mean()
+else:
+    df_duration_batch = pd.DataFrame(columns=["page", "avg_duration"])
+
+if not df_timeagg_batch.empty and {"window_start", "page", "count"}.issubset(df_timeagg_batch.columns):
+    df_timeagg_batch = df_timeagg_batch.groupby(["window_start", "page"], as_index=False)["count"].sum()
+else:
+    df_timeagg_batch = pd.DataFrame(columns=["window_start", "page", "count"])
+
+# Layout of App no
 app.layout = dbc.Container([
     html.H1("📊 Clickstream Campaign Dashboard", className="my-4"),
 
-    dcc.Interval(id="live-interval", interval=60 * 1000, n_intervals=0),
+    dcc.Interval(id="live-interval", interval=10 * 1000, n_intervals=0),
     dcc.Graph(id="live-top-products"),
 
     dcc.Graph(
@@ -103,7 +122,38 @@ app.layout = dbc.Container([
         id="line-timeagg",
         figure=px.line(df_timeagg, x="window_start", y="count", color="page",
                        title="Seitenbesuche über Zeit (time_agg)")
+    ),
+
+    html.Hr(),
+    html.H2("📦 Batch Visualisierung", className="my-4"),
+
+    dcc.Graph(
+        id="bar-top-products-batch",
+        figure=px.bar(df_purchases_batch, x="product_id", y="purchases", title="Batch: Top-Produkte nach Käufen")
+    ),
+
+    dcc.Graph(
+        id="bar-cart-batch",
+        figure=px.bar(df_cart_batch, x="product_id", y="cart_adds", title="Batch: Top-Produkte im Warenkorb")
+    ),
+
+    dcc.Graph(
+        id="bar-views-batch",
+        figure=px.bar(df_views_batch, x="product_id", y="product_views", title="Batch: Meistgesehene Produkte")
+    ),
+
+    dcc.Graph(
+        id="bar-duration-batch",
+        figure=px.bar(df_duration_batch, x="page", y="avg_duration", color="page",
+                      title="Batch: Ø Verweildauer pro Seite")
+    ),
+
+    dcc.Graph(
+        id="line-timeagg-batch",
+        figure=px.line(df_timeagg_batch, x="window_start", y="count", color="page",
+                       title="Batch: Seitenbesuche über Zeit")
     )
+
 ], fluid=True)
 
 
@@ -112,8 +162,7 @@ app.layout = dbc.Container([
     Input("live-interval", "n_intervals")
 )
 def update_live_top_products(n):
-    return fetch_live_product_purchases(minutes=10, top_n=5)
-
+    return fetch_live_product_purchases(hours_back=6, top_n=5)
 
 if __name__ == "__main__":
     print("Open http://localhost:8050 in your Browser.")

@@ -1,7 +1,6 @@
 version: "3.8"
 
 services:
-  # Starting Kafka and zookeeper
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
     environment:
@@ -23,39 +22,61 @@ services:
       KAFKA_CREATE_TOPICS: "clickstream:1:1"
     depends_on:
       - zookeeper
+    entrypoint:
+      - bash
+      - -c
+      - |
+        /app/wait-for-it.sh zookeeper:2181 --timeout=60 --strict --
+        echo "🟢 Zookeeper ist verfügbar – Starte Kafka..."
+        /etc/confluent/docker/run
     networks:
       - sparknet
 
-
-  # Start spark
   spark:
-    image: spark:3.5.6-scala2.12-java17-python3-ubuntu
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
     container_name: spark
-    user: root
     volumes:
       - .:/app
-    working_dir: /app
     depends_on:
       - kafka
       - cassandra
-      - cassandra-init
-    entrypoint: >
-      bash -c "
-      echo 'Warte auf Kafka...';
-      sleep 20;
-      apt update &&
-      apt install -y python3 &&
-      pip3 install cassandra-driver &&
-      python3 run_spark.py
-      "
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      PROCESSING_MODE: "stream"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        ./wait-for-it.sh kafka:9092 --timeout=60 --strict --
+        ./wait-for-it.sh cassandra:9042 --timeout=60 --strict --
+        echo '🚀 Starte Spark-Streaming mit --packages...'
+        exec /opt/spark/bin/spark-submit \
+          --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6,com.datastax.spark:spark-cassandra-connector_2.12:3.4.1 \
+          /app/spark_processor.py
+
     networks:
       - sparknet
 
-  # Start producer of clickstreams
-  clickstream-producer:
+  # For generating csv files which can then be processed with batch layer
+  batch-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    working_dir: /app
+    entrypoint: >
+      bash -c "
+      echo '📦 Starte Batch-Datengenerierung...';
+      python clickstream_generator/batch_creator.py
+      "
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - sparknet
+
+  stream-producer:
     build:
       context: .
       dockerfile: Dockerfile
@@ -66,12 +87,14 @@ services:
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Starting clickstream generation...';
-      python clickstream_producer.py
+      ./wait-for-it.sh kafka:9092 --timeout=60 --strict -- \
+      echo '🌐 Starte Live-Stream Producer...';
+      python clickstream_generator/live_producer.py
       "
     environment:
-      KAFKA_BROKER: kafka:9092
-      KAFKA_TOPIC: clickstream
+      - KAFKA_BROKER=kafka:9092
+      - KAFKA_TOPIC=clickstream
+      - PYTHONPATH=/app
     networks:
       - sparknet
 
@@ -97,8 +120,7 @@ services:
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Warte auf Cassandra...';
-      sleep 40;
+      ./wait-for-it.sh cassandra:9042 --timeout=60 --strict -- \
       python init_cassandra.py
       "
     networks:
@@ -118,16 +140,16 @@ services:
     working_dir: /app
     entrypoint: >
       bash -c "
-      echo 'Starting Dashboard...';
+      ./wait-for-it.sh cassandra:9042 --timeout=60 --strict -- \
+      sleep 20;
+      echo '📊 Starting Dashboard...';
       python dashboard/dashboard.py
       "
     networks:
       - sparknet
-
 
 networks:
   sparknet:
 
 volumes:
   cassandra-data:
-

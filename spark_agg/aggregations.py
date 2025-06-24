@@ -5,7 +5,7 @@ def build_aggregations(raw_stream) -> list:
     aggregations = []
     # time_agg mit Watermark
     time_agg = (raw
-                .withWatermark("ts", "10 minutes")
+                #.withWatermark("ts", "10 minutes")
                 .groupBy(window("ts", "1 minute"), "page")
                 .count()
                 .withColumn("window_start", col("window").start)
@@ -16,7 +16,7 @@ def build_aggregations(raw_stream) -> list:
     # campaign_events mit Watermark
     agg_campaign = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .groupBy(window("ts", "5 minutes"), "utm_campaign", "utm_source")
         .count()
         .withColumnRenamed("count", "event_count")
@@ -28,7 +28,7 @@ def build_aggregations(raw_stream) -> list:
     # campaign_actions mit Watermark
     agg_campaign_actions = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .withColumn("is_add_to_cart", when(col("action") == "add_to_cart", 1).otherwise(0))
         .withColumn("is_purchase", when(col("action") == "purchase", 1).otherwise(0))
         .groupBy(window("ts", "1 hour"), "utm_campaign")
@@ -44,7 +44,7 @@ def build_aggregations(raw_stream) -> list:
     # product_views mit Watermark
     agg_product_views = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .filter(col("page") == "product_detail")
         .groupBy(window("ts", "1 hour"), "product_id")
         .count()
@@ -57,7 +57,7 @@ def build_aggregations(raw_stream) -> list:
     # product_actions mit Watermark
     product_actions = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .filter(col("product_id").isNotNull())
         .withColumn("is_view", when(col("action") == "view", 1).otherwise(0))
         .withColumn("is_add", when(col("action") == "add_to_cart", 1).otherwise(0))
@@ -75,7 +75,7 @@ def build_aggregations(raw_stream) -> list:
     # agg_duration mit Watermark
     agg_duration = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .groupBy(window("ts", "10 minutes"), "page")
         .agg(avg("page_duration").alias("avg_duration"))
         .withColumn("window_start", col("window").start)
@@ -86,7 +86,7 @@ def build_aggregations(raw_stream) -> list:
     # 1. Produkt-Käufe
     agg_product_purchases = (
         raw
-        .withWatermark("ts", "10 minutes")
+       # .withWatermark("ts", "10 minutes")
         .filter((col("action") == "purchase") & (col("product_id").isNotNull()))
         .groupBy(window("ts", "1 hour"), "product_id")
         .count()
@@ -100,7 +100,7 @@ def build_aggregations(raw_stream) -> list:
     # 2. Produkte im Warenkorb
     agg_product_cart = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .filter((col("action") == "add_to_cart")  & (col("product_id").isNotNull()))
         .groupBy(window("ts", "1 hour"), "product_id")
         .count()
@@ -114,7 +114,7 @@ def build_aggregations(raw_stream) -> list:
     # 3. Website Views gesamt
     agg_website_views = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .groupBy(window("ts", "1 hour"))
         .count()
         .withColumnRenamed("count", "views")
@@ -127,7 +127,7 @@ def build_aggregations(raw_stream) -> list:
     # 4. Geräteverteilung
     agg_device_distribution = (
         raw
-        .withWatermark("ts", "10 minutes")
+        #.withWatermark("ts", "10 minutes")
         .groupBy(window("ts", "1 hour"), "device_type")
         .count()
         .withColumnRenamed("count", "views")

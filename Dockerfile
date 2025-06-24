@@ -9,5 +9,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+ENV PYTHONPATH=/app
+
 # Setze das Startkommando für den Container
 CMD ["python", "kafka_producer.py"]
