@@ -3,21 +3,6 @@
 
 This project simulates clickstream behavior from users on an e-commerce website. It supports real-time streaming and batch processing, stores analytics results in Cassandra, and visualizes them through a dashboard.
 
----
-
-## 🚀 Getting Started
-
-### 🔧 Prerequisites
-
-- **Apache Spark 3.5.6** (Scala 2.13, Hadoop 3): [Download here](https://spark.apache.org/downloads.html)
-- **Java 17**:  
-  Install via:
-
-  ```bash
-  sudo apt install openjdk-17-jdk
-  ```
-
----
 
 ## 🐳 Run via Docker Compose
 
